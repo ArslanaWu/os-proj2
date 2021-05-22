@@ -481,7 +481,8 @@ void print_top_line(const process &p, int mem_total) {
               << std::setw(10) << stat["name"] << resetiosflags(std::ios::left);
 }
 
-std::priority_queue<process, std::vector<process>, compare_process> get_top_R_process(int r, int field) {
+std::priority_queue<process, std::vector<process>, compare_process>
+get_top_R_process(int r, int field, const std::vector<std::string> &pid_list) {
     compare_process cmp(field);
     std::priority_queue<process, std::vector<process>, compare_process> pq(cmp);
 
@@ -491,6 +492,10 @@ std::priority_queue<process, std::vector<process>, compare_process> get_top_R_pr
         while (auto f = readdir(dir)) {
             if (is_digit(f->d_name)) {
                 std::string pid = f->d_name;
+
+                if (!pid_list.empty() && std::find(pid_list.begin(), pid_list.end(), pid) == pid_list.end()) {
+                    continue;
+                }
 
                 std::unordered_map<std::string, int> statm = read_pid_statm(pid);
                 std::unordered_map<std::string, std::string> stat = read_pid_stat(pid);
@@ -564,7 +569,7 @@ int main(int argc, char **argv) {
             std::unordered_map<std::string, int> s_mem = swap_mem();
             // read information for process
             std::priority_queue<process,
-                    std::vector<process>, compare_process> pq = get_top_R_process(r, field);
+                    std::vector<process>, compare_process> pq = get_top_R_process(r, field, pid_list);
 
             // print global information
             print_top_title(v_mem, s_mem);
@@ -597,7 +602,7 @@ int main(int argc, char **argv) {
         system("/bin/stty cooked");
         system("stty echo"); // show command input
 
-        if (input == 'd') {
+        if (input == 'd' || input == 'D') {
             // change sleep time
             printf("\033c"); // clear old
             double new_sleep_time = sleep_useconds / 1e6;
@@ -606,16 +611,17 @@ int main(int argc, char **argv) {
             if (std::cin.fail()) {
                 std::cin.clear();
                 std::cin >> invalid_input;
-                std::cout << "\rInvalid input";
+                std::cout << "Invalid input" << std::endl;
             } else if (new_sleep_time > 10 || new_sleep_time < 0) {
-                std::cout << "\rInvalid input";
+                std::cout << "Invalid input" << std::endl;
             } else {
                 sleep_useconds = new_sleep_time * 1e6;
             }
-        } else if (input == 'h') {
+        } else if (input == 'h' || input == 'H') {
             // change thread mode
             if (thread_mode == 1) {
                 thread_mode = 0;
+                pid_list.clear();
             } else {
                 printf("\033c"); // clear old
                 std::cout << "Input pid: ";
@@ -624,16 +630,16 @@ int main(int argc, char **argv) {
                 if (std::cin.fail()) {
                     std::cin.clear();
                     std::cin >> invalid_input;
-                    std::cout << "\rInvalid input";
+                    std::cout << "Invalid input" << std::endl;
                 } else if (pid < 1) {
-                    std::cout << "\rInvalid input";
+                    std::cout << "Invalid input" << std::endl;
                 } else {
                     pid_list.clear();
                     pid_list.push_back(std::to_string(pid));
                     thread_mode = 1;
                 }
             }
-        } else if (input == 'o') {
+        } else if (input == 'o' || input == 'O') {
             // change sort mode
             printf("\033c"); // clear old
             std::string field_name;
@@ -644,46 +650,47 @@ int main(int argc, char **argv) {
             } else if (field_name == "RES") {
                 field = 1;
             } else {
-                std::cout << "\rInvalid input";
+                std::cout << "Invalid input" << std::endl;
             }
-        } else if (input == 'p') {
-            // monitor specific pid
-            printf("\033c"); // clear old
-
-            // get monitor
-            std::vector<std::string> new_pid_list;
-            int pid;
-            std::cout << "Next pid, " << "enter -1 to stop (max amount " << r << "): ";
-            std::cin >> pid;
-            while (pid_list.size() < r) {
-                if (std::cin.fail()) {
-                    std::cin.clear();
-                    std::cin >> invalid_input;
-                    std::cout << "Invalid input\n";
-                } else if (pid == -1) {
-                    break;
-                } else if (pid < 1) {
-                    std::cout << "Invalid input\n";
-                } else {
-                    new_pid_list.push_back(std::to_string(pid));
-                }
-                std::cout << "Next pid, max " << r << ", enter -1 to stop: ";
-                std::cin >> pid;
-            }
-
-            if (!new_pid_list.empty()) {
-                if (thread_mode == 1) {
-                    thread_mode = 0;
-                    std::cout << "Exit thread mode" << std::endl;
-                }
+        } else if (input == 'p' || input == 'P') {
+            if (thread_mode == 0 && !pid_list.empty()) {
+                // exit monitor mode
                 pid_list.clear();
-                pid_list.insert(pid_list.end(), new_pid_list.begin(), new_pid_list.end());
+            } else {
+                // get monitor pid
+                printf("\033c"); // clear old
+                std::vector<std::string> new_pid_list;
+                int pid;
+                std::cout << "Next pid, " << "enter -1 to stop (max amount " << r << "): ";
+                std::cin >> pid;
+                while (pid_list.size() < r) {
+                    if (std::cin.fail()) {
+                        std::cin.clear();
+                        std::cin >> invalid_input;
+                        std::cout << "Invalid input" << std::endl;
+                    } else if (pid == -1) {
+                        break;
+                    } else if (pid < 1) {
+                        std::cout << "Invalid input" << std::endl;
+                    } else {
+                        new_pid_list.push_back(std::to_string(pid));
+                    }
+                    std::cout << "Next pid, " << "enter -1 to stop (max amount " << r << "): ";
+                    std::cin >> pid;
+                }
+
+                if (!new_pid_list.empty()) {
+                    if (thread_mode == 1) {
+                        thread_mode = 0;
+                    }
+                    pid_list.clear();
+                    pid_list.insert(pid_list.end(), new_pid_list.begin(), new_pid_list.end());
+                }
             }
-        } else if (input == 'q') {
+        } else if (input == 'q' || input == 'Q') {
             return (0);
         }
 
-        clean_cin_buffer(); // clean cin buffer
         _kbhit_initialized = false;
         system("stty -echo"); // hide command input
     }
