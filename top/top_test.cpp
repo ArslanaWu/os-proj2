@@ -12,12 +12,15 @@
 #include <sys/ioctl.h>
 #include <queue>
 #include <stack>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 /*
  * todo:
  * 1. try catch for invalid situation, e.g. file not found
  * 2. add memory info for threads (add an option?)
- * 3. provide more option to enable different sort methods, quantity of shown process
+ * 3. provide more option to set quantity of shown process
  * 4. remove unused values
  * 5. optimize structure of code, e.g. create all process struct at first, change mem value instead of create new maps
  * 6. beautify
@@ -32,22 +35,43 @@ struct process {
     std::unordered_map<std::string, int> statm;
     std::unordered_map<std::string, std::string> stat;
     int nice;
-//    std::unordered_map<std::string, std::unordered_map<std::string, int>> task_statm;
+    std::unordered_map<std::string, std::unordered_map<std::string, int>> task_statm;
 
     process(const std::string &pid,
             const std::unordered_map<std::string, int> &statm,
             const std::unordered_map<std::string, std::string> &stat,
+            const std::unordered_map<std::string,
+                    std::unordered_map<std::string, int>> &task_statm,
             int nice) {
         this->pid = pid;
         this->statm = statm;
         this->stat = stat;
         this->nice = nice;
+        this->task_statm = task_statm;
     }
 
-    bool operator<(const process &b) const {
-        std::unordered_map<std::string, int> a_statm = statm;
-        std::unordered_map<std::string, int> b_statm = b.statm;
-        return a_statm["rss"] > b_statm["rss"];
+//    bool operator<(const process &b) const {
+//        std::unordered_map<std::string, int> a_statm = statm;
+//        std::unordered_map<std::string, int> b_statm = b.statm;
+//        return a_statm["rss"] > b_statm["rss"];
+//    }
+};
+
+struct compare_process {
+    int field;
+
+    compare_process(int field = 0) : field(field) {}
+
+    bool operator()(const process &lhs, const process &rhs) const {
+        std::unordered_map<std::string, int> lhs_statm = lhs.statm;
+        std::unordered_map<std::string, int> rhs_statm = rhs.statm;
+        switch (field) {
+            case 0:
+                return lhs_statm["vms"] > rhs_statm["vms"];
+            case 1:
+                return lhs_statm["rss"] > rhs_statm["rss"];
+        }
+        return true;
     }
 };
 
@@ -91,12 +115,36 @@ bool is_digit(const std::string &str) {
 }
 
 /**
- * reset after ctrl+c is pressed
+ * reset settings after ctrl+c is pressed
  * @param signum
  */
 void SIGINT_handler(int signum) {
-    printf("\e[?25h"); // re-enable cursor
+    printf("\033[?25h"); // re-enable cursor
     exit(signum);
+}
+
+/**
+ * check if there is something in the input buffer
+ *
+ * @return true or false
+ */
+int _kbhit() {
+    static const int STDIN = 0;
+    static bool initialized = false;
+
+    if (!initialized) {
+        // Use termios to turn off line buffering
+        termios term;
+        tcgetattr(STDIN, &term);
+        term.c_lflag &= ~ICANON;
+        tcsetattr(STDIN, TCSANOW, &term);
+        setbuf(stdin, NULL);
+        initialized = true;
+    }
+
+    int bytesWaiting;
+    ioctl(STDIN, FIONREAD, &bytesWaiting);
+    return bytesWaiting;
 }
 
 /**
@@ -195,13 +243,6 @@ std::unordered_map<std::string, std::string> read_pid_stat(const std::string &pi
 }
 
 /**
- * mem size in KB
- * @param pid
- */
-void read_pid_status(const std::string &pid) {
-}
-
-/**
  * read /proc/pid/statm
  * @param pid
  * @return mem_map <mem name, size>, mem size in KB
@@ -226,10 +267,6 @@ std::unordered_map<std::string, int> read_pid_statm(const std::string &pid) {
     result_map["dirty"] = stoi(info[6]) * PAGESIZE;
 
     return result_map;
-}
-
-void read_pid_smaps(const std::string &pid) {
-
 }
 
 std::unordered_map<std::string, std::unordered_map<std::string, int>> read_pid_task_statm(const std::string &pid) {
@@ -363,6 +400,17 @@ double get_boot_time() {
     return stoi(split(line, "\\s+")[1]);
 }
 
+void update_process_cnt(const std::string &status) {
+    total_process++;
+    if (status == "S" || status == "D") {
+        sleeping_process++;
+    } else if (status == "R") {
+        running_process++;
+    } else if (status == "T") {
+        stopped_process++;
+    }
+}
+
 void print_top_title(std::unordered_map<std::string, int> &v_mem,
                      std::unordered_map<std::string, int> &s_mem) {
     std::cout << setiosflags(std::ios::left)
@@ -428,8 +476,9 @@ void print_top_line(const process &p, int mem_total) {
               << std::setw(10) << stat["name"] << resetiosflags(std::ios::left);
 }
 
-std::priority_queue<process> get_top_R_process(int r) {
-    std::priority_queue<process> pq;
+std::priority_queue<process, std::vector<process>, compare_process> get_top_R_process(int r, int field) {
+    compare_process cmp(field);
+    std::priority_queue<process, std::vector<process>, compare_process> pq(cmp);
 
     std::string task_dir = "/proc";
     const char *d = task_dir.c_str();
@@ -439,17 +488,12 @@ std::priority_queue<process> get_top_R_process(int r) {
                 std::string pid = f->d_name;
 
                 std::unordered_map<std::string, int> statm = read_pid_statm(pid);
-                std::unordered_map<std::string, std::string> stat = read_pid_stat(pid);;
+                std::unordered_map<std::string, std::string> stat = read_pid_stat(pid);
+                std::unordered_map<std::string,
+                        std::unordered_map<std::string, int>> task_statm = read_pid_task_statm(pid);
                 int nice = getpriority(PRIO_PROCESS, stoi(pid));
 
-                total_process++;
-                if (stat["status"] == "S" || stat["status"] == "D") {
-                    sleeping_process++;
-                } else if (stat["status"] == "R") {
-                    running_process++;
-                } else if (stat["status"] == "T") {
-                    stopped_process++;
-                }
+                update_process_cnt(stat["status"]);
 
                 if (pq.size() >= r) {
                     std::unordered_map<std::string, int> top_statm = pq.top().statm;
@@ -459,9 +503,9 @@ std::priority_queue<process> get_top_R_process(int r) {
                 }
 
                 if (pq.size() < r) {
-                    pq.push(process(f->d_name, statm, stat, nice));
+                    process p(f->d_name, statm, stat, task_statm, nice);
+                    pq.push(p);
                 }
-
             }
         }
         closedir(dir);
@@ -470,46 +514,119 @@ std::priority_queue<process> get_top_R_process(int r) {
     return pq;
 }
 
-int main() {
-    std::signal(SIGINT, SIGINT_handler);
-    int cnt = 10;
+void print_usage() {
+    std::cout << "\nUsage: [options]\n"
+              << "Options:\n"
+              << "-d, --delay time          specifies the delay between screen updates\n"
+              << "-h, --thread mode         structs top to display individual threads\n"
+              << "-o, --change sort field   specifies the name of the field on which process will be sorted\n"
+              << "-p, --monitor pid         monitor only processes with specified process IDs\n"
+              << "-q, --quit                quit top"
+              << std::endl;
+}
 
-    printf("\e[?25l"); // hide cursor
 
+int main(int argc, char **argv) {
+    std::signal(SIGINT, SIGINT_handler); // reset command line settings
+    system("stty -echo"); // hide command input
+
+    // get window size
     struct winsize size;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
     int r = size.ws_row - 1 - 4;
 
+    // settings of top
+    int thread_mode = 0; // 0: not show threads of processes
+    int field = 0; // sort type
+    int sleep_useconds = 500000; //sleep time
+
     std::stack<process> stack;
 
     while (true) {
-        printf("\033c"); // clear old
-//        printf("\033[2J\033[%d;%dH", 0, 0);
-        total_process = 0;
-        running_process = 0;
-        stopped_process = 0;
-        sleeping_process = 0;
+        while (!_kbhit()) {
+            printf("\033c"); // clear old
+            printf("\033[?25l"); // hide cursor
 
-        std::unordered_map<std::string, int> v_mem = virtual_mem();
-        std::unordered_map<std::string, int> s_mem = swap_mem();
-        std::priority_queue<process> pq = get_top_R_process(r);//size.ws_row - 1
+            //init
+            total_process = 0;
+            running_process = 0;
+            stopped_process = 0;
+            sleeping_process = 0;
 
-        print_top_title(v_mem, s_mem);
-        while (!pq.empty()) {
-            stack.push(pq.top());
-            pq.pop();
-        }
-        while (!stack.empty()) {
-            print_top_line(stack.top(), v_mem["total"]);
-            stack.pop();
-            if (!stack.empty()) {
-                std::cout << std::endl;
+            // read global information
+            std::unordered_map<std::string, int> v_mem = virtual_mem();
+            std::unordered_map<std::string, int> s_mem = swap_mem();
+            // read information for process
+            std::priority_queue<process,
+                    std::vector<process>, compare_process> pq = get_top_R_process(r, field);
+
+            // print global information
+            print_top_title(v_mem, s_mem);
+            // print process information
+            while (!pq.empty()) {
+                stack.push(pq.top());
+                pq.pop();
             }
-        }
-//        std::cout << cnt;
-        fflush(stdout);
+            while (!stack.empty()) {
+                if (thread_mode == 0) {
+                    print_top_line(stack.top(), v_mem["total"]);
+                } else {
+//                    todo: print for task
+                    std::cout << "task mode";
+                }
 
-        sleep(3);
+                stack.pop();
+                if (!stack.empty()) {
+                    std::cout << std::endl;
+                }
+            }
+            fflush(stdout);
+
+            usleep(sleep_useconds);
+        }
+
+        // input detected
+        int input = getchar();
+        system("stty echo"); // show command input
+        if (input == 'd') {
+            // change sleep time
+            printf("\033c"); // clear old
+            double new_sleep_time = sleep_useconds / 1e6;
+            std::cout << "Change sleep time from " << new_sleep_time << " to: ";
+            std::cin >> new_sleep_time;
+            if (std::cin.fail() || new_sleep_time > 10 || new_sleep_time < 0) {
+                std::cin.clear();
+                std::cout << "\rInvalid input";
+            } else {
+                sleep_useconds = new_sleep_time * 1e6;
+            }
+        } else if (input == 'h') {
+            // change thread mode
+            thread_mode = 1 - thread_mode;
+        } else if (input == 'o') {
+            // change sort mode
+            printf("\033c"); // clear old
+            std::string field_name;
+            std::cout << "Input field want to sort, VIRT or RES: ";
+            std::cin >> field_name;
+            if (field_name == "VIRT") {
+                field = 0;
+            } else if (field_name == "RES") {
+                field = 1;
+            } else {
+                std::cout << "\rInvalid input";
+            }
+        } else if (input == 'p') {
+            // monitor specific pid
+            printf("\033c"); // clear old
+            std::cout << "monitor pid";
+//            todo: monitor specific pid
+        } else if (input == 'q' || input == 'Q') {
+            return (0);
+        }
+        system("stty -echo"); // hide command input
+
+        fflush(stdout);
     }
 }
 
@@ -523,3 +640,10 @@ int main() {
  * Psutil.test() %MEM: top %MEM, =pid_statm["rss"]/virtual_mem["total"]
  * create time =stod(stat["create_time"]) / CLOCK_TICKS + get_boot_time()
  */
+//    int c;
+//    system ("/bin/stty raw");
+//    while((c=getchar())!= '.') {
+//        /* type a period to break out of the loop, since CTRL-D won't work raw */
+//        putchar(c);
+//    }
+//    system ("/bin/stty cooked");
