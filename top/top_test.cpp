@@ -19,10 +19,7 @@
 /*
  * todo:
  * 1. try catch for invalid situation, e.g. file not found
- * 2. add memory info for threads (add an option?)
- * 3. provide more option to set quantity of shown process
  * 4. remove unused values
- * 5. optimize structure of code, e.g. create all process struct at first, change mem value instead of create new maps
  * 6. beautify
  */
 
@@ -35,20 +32,29 @@ struct process {
     std::string pid;
     std::unordered_map<std::string, int> statm;
     std::unordered_map<std::string, std::string> stat;
+//    std::vector<std::string> tid_list;
     int nice;
-    std::unordered_map<std::string, std::unordered_map<std::string, int>> task_statm;
+
+//    process(const std::string &pid,
+//            const std::unordered_map<std::string, int> &statm,
+//            const std::unordered_map<std::string, std::string> &stat,
+//            const std::vector<std::string> &tid_list,
+//            int nice) {
+//        this->pid = pid;
+//        this->statm = statm;
+//        this->stat = stat;
+//        this->nice = nice;
+//        this->tid_list = tid_list;
+//    }
 
     process(const std::string &pid,
             const std::unordered_map<std::string, int> &statm,
             const std::unordered_map<std::string, std::string> &stat,
-            const std::unordered_map<std::string,
-                    std::unordered_map<std::string, int>> &task_statm,
             int nice) {
         this->pid = pid;
         this->statm = statm;
         this->stat = stat;
         this->nice = nice;
-        this->task_statm = task_statm;
     }
 
 //    bool operator<(const process &b) const {
@@ -82,7 +88,8 @@ struct compare_process {
  * @param regex
  * @return
  */
-std::vector<std::string> split(const std::string &input, const std::string &regex) {
+std::vector<std::string>
+split(const std::string &input, const std::string &regex) {
     // passing -1 as the submatch index parameter performs splitting
     std::regex re(regex);
     std::sregex_token_iterator
@@ -147,16 +154,12 @@ int _kbhit() {
     return bytesWaiting;
 }
 
-void clean_cin_buffer() {
-    std::cin.clear();
-    std::cin.ignore();
-}
-
 /**
  * read /proc/meminfo
  * @return map<mem name, size>, size in KB
  */
-std::unordered_map<std::string, int> read_meminfo() {
+std::unordered_map<std::string, int>
+read_meminfo() {
     std::unordered_map<std::string, int> mem_map;
 
     std::ifstream fin;
@@ -183,7 +186,8 @@ std::unordered_map<std::string, int> read_meminfo() {
  * read /proc/vmstat
  * @return
  */
-std::pair<int, int> read_vmstat() {
+std::pair<int, int>
+read_vmstat() {
     int sin = -1, sout = -1;
     std::ifstream fin;
     fin.open("/proc/vmstat");
@@ -207,12 +211,15 @@ std::pair<int, int> read_vmstat() {
  * @param pid
  * @return info_map
  */
-std::unordered_map<std::string, std::string> read_pid_stat(const std::string &pid) {
+std::unordered_map<std::string, std::string>
+read_pid_stat(const std::string &path) {
     std::ifstream fin;
-    fin.open("/proc/" + pid + "/stat");
+    fin.open(path);
     std::string line;
-    while (line.empty()) {
-        getline(fin, line);
+    std::string next_line;
+    while (!fin.eof()) {
+        getline(fin, next_line);
+        line += next_line;
     }
     fin.close();
 
@@ -252,12 +259,15 @@ std::unordered_map<std::string, std::string> read_pid_stat(const std::string &pi
  * @param pid
  * @return mem_map <mem name, size>, mem size in KB
  */
-std::unordered_map<std::string, int> read_pid_statm(const std::string &pid) {
+std::unordered_map<std::string, int>
+read_pid_statm(const std::string &path) {
     std::ifstream fin;
-    fin.open("/proc/" + pid + "/statm");
+    fin.open(path);
     std::string line;
-    while (line.empty()) {
-        getline(fin, line);
+    std::string next_line;
+    while (!fin.eof()) {
+        getline(fin, next_line);
+        line += next_line;
     }
     fin.close();
 
@@ -274,47 +284,11 @@ std::unordered_map<std::string, int> read_pid_statm(const std::string &pid) {
     return result_map;
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, int>> read_pid_task_statm(const std::string &pid) {
-    std::unordered_map<std::string, std::unordered_map<std::string, int>> process_map;
-
-    std::ifstream fin;
-    std::string task_dir = "/proc/" + pid + "/task/";
-    const char *p = task_dir.c_str();
-    if (auto dir = opendir(p)) {
-        while (auto f = readdir(dir)) {
-            if (f->d_name[0] == '.') {
-                continue; // Skip everything that starts with a dot
-            } else {
-                fin.open(task_dir + f->d_name + "/statm");
-                std::string line;
-                while (line.empty()) {
-                    getline(fin, line);
-                }
-                fin.close();
-
-                std::vector<std::string> info = split(line, "\\s+");
-                std::unordered_map<std::string, int> task_map;
-                task_map["vms"] = stoi(info[0]) * PAGESIZE;
-                task_map["rss"] = stoi(info[1]) * PAGESIZE;
-                task_map["shared"] = stoi(info[2]) * PAGESIZE;
-                task_map["text"] = stoi(info[3]) * PAGESIZE;
-                task_map["lib"] = stoi(info[4]) * PAGESIZE;
-                task_map["data"] = stoi(info[5]) * PAGESIZE;
-                task_map["dirty"] = stoi(info[6]) * PAGESIZE;
-
-                process_map[f->d_name] = task_map;
-            }
-        }
-        closedir(dir);
-    }
-
-    return process_map;
-}
-
 /**
  * @return mem_map and mem_percent, mem size in KB
  */
-std::unordered_map<std::string, int> virtual_mem() {
+std::unordered_map<std::string, int>
+virtual_mem() {
     std::unordered_map<std::string, int> mem_map = read_meminfo();
 
     int mem_total, mem_free, mem_avail, mem_buffers, mem_cached,
@@ -358,7 +332,8 @@ std::unordered_map<std::string, int> virtual_mem() {
 /**
  * @return mem_map and mem_percent, mem size in KB
  */
-std::unordered_map<std::string, int> swap_mem() {
+std::unordered_map<std::string, int>
+swap_mem() {
     std::unordered_map<std::string, int> mem_map = read_meminfo();
 
     int mem_total, mem_free, mem_used;
@@ -438,13 +413,13 @@ void print_top_title(std::unordered_map<std::string, int> &v_mem,
               << std::setw(10) << s_mem["total"] << " total,"
               << std::setw(10) << s_mem["free"] << " free,"
               << std::setw(10) << s_mem["used"] << " used,"
-              << std::setw(10) << v_mem["avail"] << " avail"
+              << std::setw(10) << v_mem["avail"] << " avail Mem"
               << std::endl;
 
     std::cout << std::endl;
 
     std::cout << setiosflags(std::ios::right)
-              << std::setw(7) << "PID" << " " << resetiosflags(std::ios::right)
+              << std::setw(7) << "ID" << " " << resetiosflags(std::ios::right)
               << setiosflags(std::ios::left)
               << std::setw(10) << "USER" << resetiosflags(std::ios::left)
               << setiosflags(std::ios::right)
@@ -497,10 +472,8 @@ get_top_R_process(int r, int field, const std::vector<std::string> &pid_list) {
                     continue;
                 }
 
-                std::unordered_map<std::string, int> statm = read_pid_statm(pid);
-                std::unordered_map<std::string, std::string> stat = read_pid_stat(pid);
-                std::unordered_map<std::string,
-                        std::unordered_map<std::string, int>> task_statm = read_pid_task_statm(pid);
+                std::unordered_map<std::string, int> statm = read_pid_statm("/proc/" + pid + "/statm");
+                std::unordered_map<std::string, std::string> stat = read_pid_stat("/proc/" + pid + "/stat");
                 int nice = getpriority(PRIO_PROCESS, stoi(pid));
 
                 update_process_cnt(stat["status"]);
@@ -513,8 +486,42 @@ get_top_R_process(int r, int field, const std::vector<std::string> &pid_list) {
                 }
 
                 if (pq.size() < r) {
-                    process p(f->d_name, statm, stat, task_statm, nice);
-                    pq.push(p);
+                    pq.push(process(f->d_name, statm, stat, nice));
+                }
+            }
+        }
+        closedir(dir);
+    }
+
+    return pq;
+}
+
+std::priority_queue<process, std::vector<process>, compare_process>
+get_top_R_task(int r, int field, const process &p) {
+    compare_process cmp(field);
+    std::priority_queue<process, std::vector<process>, compare_process> pq(cmp);
+
+    std::string task_dir = "/proc/" + p.pid + "/task";
+    const char *d = task_dir.c_str();
+    if (auto dir = opendir(d)) {
+        while (auto f = readdir(dir)) {
+            if (is_digit(f->d_name)) {
+                std::string tid = f->d_name;
+
+                std::unordered_map<std::string, int> statm = read_pid_statm(
+                        "/proc/" + p.pid + "/task/" + tid + "/statm");
+                std::unordered_map<std::string, std::string> stat = read_pid_stat(
+                        "/proc/" + p.pid + "/task/" + tid + "/stat");
+                int nice = getpriority(PRIO_PROCESS, stoi(tid));
+
+                if (pq.size() >= r) {
+                    std::unordered_map<std::string, int> top_statm = pq.top().statm;
+                    if (statm["rss"] > top_statm["rss"]) {
+                        pq.pop();
+                    }
+                }
+                if (pq.size() < r) {
+                    pq.push(process(f->d_name, statm, stat, nice));
                 }
             }
         }
@@ -534,7 +541,6 @@ void print_usage() {
               << "-q, --quit                quit top"
               << std::endl;
 }
-
 
 int main(int argc, char **argv) {
     std::signal(SIGINT, SIGINT_handler); // reset command line settings
@@ -570,6 +576,9 @@ int main(int argc, char **argv) {
             // read information for process
             std::priority_queue<process,
                     std::vector<process>, compare_process> pq = get_top_R_process(r, field, pid_list);
+            if (thread_mode == 1 && !pq.empty()) {
+                pq = get_top_R_task(r, field, pq.top());
+            }
 
             // print global information
             print_top_title(v_mem, s_mem);
@@ -579,13 +588,7 @@ int main(int argc, char **argv) {
                 pq.pop();
             }
             while (!stack.empty()) {
-                if (thread_mode == 0) {
-                    print_top_line(stack.top(), v_mem["total"]);
-                } else {
-//                    todo: print for task
-                    std::cout << "task mode";
-                }
-
+                print_top_line(stack.top(), v_mem["total"]);
                 stack.pop();
                 if (!stack.empty()) {
                     std::cout << std::endl;
