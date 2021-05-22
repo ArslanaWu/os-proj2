@@ -29,6 +29,7 @@
 const int PAGESIZE = getpagesize() / 1024; //// size in KB
 const long CLOCK_TICKS = sysconf(_SC_CLK_TCK);
 int total_process = 0, running_process = 0, sleeping_process = 0, stopped_process = 0;
+static bool _kbhit_initialized = false;
 
 struct process {
     std::string pid;
@@ -130,21 +131,25 @@ void SIGINT_handler(int signum) {
  */
 int _kbhit() {
     static const int STDIN = 0;
-    static bool initialized = false;
 
-    if (!initialized) {
+    if (!_kbhit_initialized) {
         // Use termios to turn off line buffering
         termios term;
         tcgetattr(STDIN, &term);
         term.c_lflag &= ~ICANON;
         tcsetattr(STDIN, TCSANOW, &term);
         setbuf(stdin, NULL);
-        initialized = true;
+        _kbhit_initialized = true;
     }
 
     int bytesWaiting;
     ioctl(STDIN, FIONREAD, &bytesWaiting);
     return bytesWaiting;
+}
+
+void clean_cin_buffer() {
+    std::cin.clear();
+    std::cin.ignore();
 }
 
 /**
@@ -539,6 +544,7 @@ int main(int argc, char **argv) {
     int thread_mode = 0; // 0: not show threads of processes
     int field = 0; // sort type
     int sleep_useconds = 500000; //sleep time
+    std::vector<std::string> pid_list;
 
     std::stack<process> stack;
 
@@ -587,22 +593,46 @@ int main(int argc, char **argv) {
 
         // input detected
         int input = getchar();
+        std::string invalid_input;
+        system("/bin/stty cooked");
         system("stty echo"); // show command input
+
         if (input == 'd') {
             // change sleep time
             printf("\033c"); // clear old
             double new_sleep_time = sleep_useconds / 1e6;
             std::cout << "Change sleep time from " << new_sleep_time << " to: ";
             std::cin >> new_sleep_time;
-            if (std::cin.fail() || new_sleep_time > 10 || new_sleep_time < 0) {
+            if (std::cin.fail()) {
                 std::cin.clear();
+                std::cin >> invalid_input;
+                std::cout << "\rInvalid input";
+            } else if (new_sleep_time > 10 || new_sleep_time < 0) {
                 std::cout << "\rInvalid input";
             } else {
                 sleep_useconds = new_sleep_time * 1e6;
             }
         } else if (input == 'h') {
             // change thread mode
-            thread_mode = 1 - thread_mode;
+            if (thread_mode == 1) {
+                thread_mode = 0;
+            } else {
+                printf("\033c"); // clear old
+                std::cout << "Input pid: ";
+                int pid;
+                std::cin >> pid;
+                if (std::cin.fail()) {
+                    std::cin.clear();
+                    std::cin >> invalid_input;
+                    std::cout << "\rInvalid input";
+                } else if (pid < 1) {
+                    std::cout << "\rInvalid input";
+                } else {
+                    pid_list.clear();
+                    pid_list.push_back(std::to_string(pid));
+                    thread_mode = 1;
+                }
+            }
         } else if (input == 'o') {
             // change sort mode
             printf("\033c"); // clear old
@@ -619,14 +649,43 @@ int main(int argc, char **argv) {
         } else if (input == 'p') {
             // monitor specific pid
             printf("\033c"); // clear old
-            std::cout << "monitor pid";
-//            todo: monitor specific pid
-        } else if (input == 'q' || input == 'Q') {
+
+            // get monitor
+            std::vector<std::string> new_pid_list;
+            int pid;
+            std::cout << "Next pid, " << "enter -1 to stop (max amount " << r << "): ";
+            std::cin >> pid;
+            while (pid_list.size() < r) {
+                if (std::cin.fail()) {
+                    std::cin.clear();
+                    std::cin >> invalid_input;
+                    std::cout << "Invalid input\n";
+                } else if (pid == -1) {
+                    break;
+                } else if (pid < 1) {
+                    std::cout << "Invalid input\n";
+                } else {
+                    new_pid_list.push_back(std::to_string(pid));
+                }
+                std::cout << "Next pid, max " << r << ", enter -1 to stop: ";
+                std::cin >> pid;
+            }
+
+            if (!new_pid_list.empty()) {
+                if (thread_mode == 1) {
+                    thread_mode = 0;
+                    std::cout << "Exit thread mode" << std::endl;
+                }
+                pid_list.clear();
+                pid_list.insert(pid_list.end(), new_pid_list.begin(), new_pid_list.end());
+            }
+        } else if (input == 'q') {
             return (0);
         }
-        system("stty -echo"); // hide command input
 
-        fflush(stdout);
+        clean_cin_buffer(); // clean cin buffer
+        _kbhit_initialized = false;
+        system("stty -echo"); // hide command input
     }
 }
 
