@@ -392,9 +392,11 @@ void update_process_cnt(const std::string &status) {
 }
 
 void print_top_title(std::unordered_map<std::string, int> &v_mem,
-                     std::unordered_map<std::string, int> &s_mem) {
+                     std::unordered_map<std::string, int> &s_mem,
+                     int thread_mode) {
+    std::string name = thread_mode == 0 ? "Processes: " : "Threads: ";
     std::cout << setiosflags(std::ios::left)
-              << std::setw(10) << "Processes: " << resetiosflags(std::ios::left)
+              << std::setw(10) << name << resetiosflags(std::ios::left)
               << std::setw(5) << total_process << " total,"
               << std::setw(5) << running_process << " running,"
               << std::setw(5) << sleeping_process << " sleeping,"
@@ -418,8 +420,9 @@ void print_top_title(std::unordered_map<std::string, int> &v_mem,
 
     std::cout << std::endl;
 
+    name = thread_mode == 0 ? "PID" : "TID";
     std::cout << setiosflags(std::ios::right)
-              << std::setw(7) << "ID" << " " << resetiosflags(std::ios::right)
+              << std::setw(7) << name << " " << resetiosflags(std::ios::right)
               << setiosflags(std::ios::left)
               << std::setw(10) << "USER" << resetiosflags(std::ios::left)
               << setiosflags(std::ios::right)
@@ -427,14 +430,14 @@ void print_top_title(std::unordered_map<std::string, int> &v_mem,
               << std::setw(4) << "NI" << " "
               << std::setw(8) << "VIRT" << " "
               << std::setw(7) << "RES" << " "
-              << std::setw(6) << "%MEM" << " "
+              << std::setw(8) << "%MEM" << " "
               << std::setw(11) << "TIME+" << " " << resetiosflags(std::ios::right)
               << setiosflags(std::ios::left)
               << std::setw(10) << "COMMAND" << resetiosflags(std::ios::left)
               << std::endl;
 }
 
-void print_top_line(const process &p, int mem_total) {
+void print_top_line(const process &p, int mem_total, int thread_mode) {
     std::string pid = p.pid;
     int nice = p.nice;
     std::unordered_map<std::string, int> statm = p.statm;
@@ -449,6 +452,7 @@ void print_top_line(const process &p, int mem_total) {
               << std::setw(4) << nice << " "
               << std::setw(8) << statm["vms"] << " "
               << std::setw(7) << statm["rss"] << " "
+              << stat["status"] << " "
               << setiosflags(std::ios::fixed) << std::setprecision(1)
               << std::setw(6) << (double) statm["rss"] / mem_total * 100 << " "
               << std::setw(11) << stat["total_cpu_time"] << " " << resetiosflags(std::ios::right)
@@ -514,6 +518,8 @@ get_top_R_task(int r, int field, const process &p) {
                         "/proc/" + p.pid + "/task/" + tid + "/stat");
                 int nice = getpriority(PRIO_PROCESS, stoi(tid));
 
+                update_process_cnt(stat["status"]);
+
                 if (pq.size() >= r) {
                     std::unordered_map<std::string, int> top_statm = pq.top().statm;
                     if (statm["rss"] > top_statm["rss"]) {
@@ -532,13 +538,14 @@ get_top_R_task(int r, int field, const process &p) {
 }
 
 void print_usage() {
-    std::cout << "\nUsage: [options]\n"
+    std::cout << "\nUsage: press [options] while running\n"
               << "Options:\n"
-              << "-d, --delay time          specifies the delay between screen updates\n"
-              << "-h, --thread mode         structs top to display individual threads\n"
-              << "-o, --change sort field   specifies the name of the field on which process will be sorted\n"
-              << "-p, --monitor pid         monitor only processes with specified process IDs\n"
-              << "-q, --quit                quit top"
+              << "d or D, delay time         specifies the delay between screen updates\n"
+              << "t ot T, thread mode        structs top to display individual threads\n"
+              << "o or O, change sort field  specifies the name of the field on which process will be sorted\n"
+              << "p or P, monitor pid        monitor only processes with specified process IDs\n"
+              << "h or H, help               print usage\n"
+              << "q or Q, quit               quit top\n"
               << std::endl;
 }
 
@@ -581,14 +588,14 @@ int main(int argc, char **argv) {
             }
 
             // print global information
-            print_top_title(v_mem, s_mem);
+            print_top_title(v_mem, s_mem, thread_mode);
             // print process information
             while (!pq.empty()) {
                 stack.push(pq.top());
                 pq.pop();
             }
             while (!stack.empty()) {
-                print_top_line(stack.top(), v_mem["total"]);
+                print_top_line(stack.top(), v_mem["total"], thread_mode);
                 stack.pop();
                 if (!stack.empty()) {
                     std::cout << std::endl;
@@ -620,7 +627,7 @@ int main(int argc, char **argv) {
             } else {
                 sleep_useconds = new_sleep_time * 1e6;
             }
-        } else if (input == 'h' || input == 'H') {
+        } else if (input == 't' || input == 'T') {
             // change thread mode
             if (thread_mode == 1) {
                 thread_mode = 0;
@@ -689,6 +696,16 @@ int main(int argc, char **argv) {
                     pid_list.clear();
                     pid_list.insert(pid_list.end(), new_pid_list.begin(), new_pid_list.end());
                 }
+            }
+        } else if (input == 'h' || input == 'H') {
+            printf("\033c"); // clear old
+            print_usage();
+            std::cout << "Input q or Q to quit: ";
+            std::string quit_input;
+            std::cin >> quit_input;
+            while (quit_input != "q" && quit_input != "Q") {
+                std::cout << "Input q or Q to quit: ";
+                std::cin >> quit_input;
             }
         } else if (input == 'q' || input == 'Q') {
             return (0);
