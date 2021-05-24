@@ -86,6 +86,7 @@ struct compare_process {
 
 /**
  * split input by regex
+ *
  * @param input
  * @param regex
  * @return
@@ -102,6 +103,7 @@ split(const std::string &input, const std::string &regex) {
 
 /**
  * add "0" before str until length of str equals total_len
+ *
  * @return filled string
  */
 std::string zfill(std::string str, int total_len) {
@@ -113,6 +115,7 @@ std::string zfill(std::string str, int total_len) {
 
 /**
  * check if a string is a number
+ *
  * @return true or false
  */
 bool is_digit(const std::string &str) {
@@ -126,6 +129,7 @@ bool is_digit(const std::string &str) {
 
 /**
  * reset settings after ctrl+c is pressed
+ *
  * @param signum
  */
 void SIGINT_handler(int signum) {
@@ -158,7 +162,8 @@ int _kbhit() {
 
 /**
  * read /proc/meminfo
- * @return map<mem name, size>, size in KB
+ *
+ * @return map stores mem name and size, size in KB
  */
 std::unordered_map<std::string, int>
 read_meminfo() {
@@ -186,7 +191,8 @@ read_meminfo() {
 
 /**
  * read /proc/vmstat
- * @return
+ *
+ * @return sin and sout
  */
 std::pair<int, int>
 read_vmstat() {
@@ -210,8 +216,9 @@ read_vmstat() {
 
 /**
  * read /proc/pid/stat
+ *
  * @param pid
- * @return info_map
+ * @return map stores info type and info
  */
 std::unordered_map<std::string, std::string>
 read_pid_stat(const std::string &path) {
@@ -258,8 +265,9 @@ read_pid_stat(const std::string &path) {
 
 /**
  * read /proc/pid/statm
+ *
  * @param pid
- * @return mem_map <mem name, size>, mem size in KB
+ * @return map stores mem name and size, mem size in KB
  */
 std::unordered_map<std::string, int>
 read_pid_statm(const std::string &path) {
@@ -287,7 +295,7 @@ read_pid_statm(const std::string &path) {
 }
 
 /**
- * @return mem_map and mem_percent, mem size in KB
+ * @return map stores mem name and size and mem_percent, size in KB
  */
 std::unordered_map<std::string, int>
 virtual_mem() {
@@ -332,7 +340,7 @@ virtual_mem() {
 }
 
 /**
- * @return mem_map and mem_percent, mem size in KB
+ * @return map stores mem name and size and mem_percent, size in KB
  */
 std::unordered_map<std::string, int>
 swap_mem() {
@@ -358,6 +366,12 @@ swap_mem() {
     return result_map;
 }
 
+/**
+ * read /proc/pid/status to get owner of process
+ *
+ * @param pid pid of process
+ * @return owner
+ */
 std::string get_process_owner(const std::string &pid) {
     std::ifstream fin;
     fin.open("/proc/" + pid + "/status");
@@ -382,6 +396,11 @@ double get_boot_time() {
     return stoi(split(line, "\\s+")[1]);
 }
 
+/**
+ * update number of each status of processes
+ *
+ * @param status process status
+ */
 void update_process_cnt(const std::string &status) {
     total_process++;
     if (status == "S" || status == "D") {
@@ -393,6 +412,13 @@ void update_process_cnt(const std::string &status) {
     }
 }
 
+/**
+ * print global mem info and title of process memory table
+ *
+ * @param v_mem map of virtual memory info
+ * @param s_mem map of swap memory info
+ * @param thread_mode show thread or not
+ */
 void print_top_title(std::unordered_map<std::string, int> &v_mem,
                      std::unordered_map<std::string, int> &s_mem,
                      int thread_mode) {
@@ -440,6 +466,13 @@ void print_top_title(std::unordered_map<std::string, int> &v_mem,
               << std::endl;
 }
 
+/**
+ * print memory info of each process or thread
+ *
+ * @param p process struct stores mem info
+ * @param mem_total total memory size
+ * @param thread_mode show thread or not
+ */
 void print_top_line(const process &p, int mem_total, int thread_mode) {
     std::string pid = p.pid;
     int nice = p.nice;
@@ -464,6 +497,14 @@ void print_top_line(const process &p, int mem_total, int thread_mode) {
               << std::setw(10) << stat["name"] << resetiosflags(std::ios::left);
 }
 
+/**
+ * get priority queue stores top-r processes
+ *
+ * @param r size of priority queue
+ * @param field define comparator
+ * @param pid_list if not empty, only return top-r of these processes (except not exist processes)
+ * @return result priority queue stores top-r processes
+ */
 std::priority_queue<process, std::vector<process>, compare_process>
 get_top_R_process(int r, int field, const std::vector<std::string> &pid_list) {
     compare_process cmp(field);
@@ -504,6 +545,14 @@ get_top_R_process(int r, int field, const std::vector<std::string> &pid_list) {
     return pq;
 }
 
+/**
+ * get priority queue stores top-r threads
+ *
+ * @param r size of priority queue
+ * @param field define comparator
+ * @param p return top-r threads of this process
+ * @return result priority queue stores top-r threads
+ */
 std::priority_queue<process, std::vector<process>, compare_process>
 get_top_R_task(int r, int field, const process &p) {
     compare_process cmp(field);
@@ -541,6 +590,9 @@ get_top_R_task(int r, int field, const process &p) {
     return pq;
 }
 
+/**
+ * print usage of these program
+ */
 void print_usage() {
     std::cout << "Usage: press [options] while running\n\n"
               << "Options:\n"
