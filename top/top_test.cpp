@@ -605,7 +605,7 @@ void print_usage() {
               << std::endl;
 }
 
-int main(int argc, char **argv) {
+void top_main() {
     std::signal(SIGINT, SIGINT_handler); // reset command line settings
     system("stty -echo"); // hide command input
 
@@ -767,7 +767,7 @@ int main(int argc, char **argv) {
             }
         } else if (input == 'q' || input == 'Q') {
             printf("\033[?25h"); // re-enable cursor
-            return (0);
+            return;
         }
 
         _kbhit_initialized = false;
