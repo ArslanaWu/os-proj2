@@ -77,6 +77,8 @@ struct compare_process {
                 return lhs_statm["vms"] > rhs_statm["vms"];
             case 1:
                 return lhs_statm["rss"] > rhs_statm["rss"];
+            case 2:
+                return lhs_statm["shared"] > rhs_statm["shared"];
         }
         return true;
     }
@@ -430,6 +432,7 @@ void print_top_title(std::unordered_map<std::string, int> &v_mem,
               << std::setw(4) << "NI" << " "
               << std::setw(8) << "VIRT" << " "
               << std::setw(7) << "RES" << " "
+              << std::setw(7) << "SHR" << " "
               << std::setw(8) << "%MEM" << " "
               << std::setw(11) << "TIME+" << " " << resetiosflags(std::ios::right)
               << setiosflags(std::ios::left)
@@ -452,6 +455,7 @@ void print_top_line(const process &p, int mem_total, int thread_mode) {
               << std::setw(4) << nice << " "
               << std::setw(8) << statm["vms"] << " "
               << std::setw(7) << statm["rss"] << " "
+              << std::setw(7) << statm["shared"] << " "
               << stat["status"] << " "
               << setiosflags(std::ios::fixed) << std::setprecision(1)
               << std::setw(6) << (double) statm["rss"] / mem_total * 100 << " "
@@ -538,7 +542,7 @@ get_top_R_task(int r, int field, const process &p) {
 }
 
 void print_usage() {
-    std::cout << "\nUsage: press [options] while running\n"
+    std::cout << "Usage: press [options] while running\n\n"
               << "Options:\n"
               << "d or D, delay time         specifies the delay between screen updates\n"
               << "t ot T, thread mode        structs top to display individual threads\n"
@@ -653,12 +657,14 @@ int main(int argc, char **argv) {
             // change sort mode
             printf("\033c"); // clear old
             std::string field_name;
-            std::cout << "Input field want to sort, VIRT or RES: ";
+            std::cout << "Input field want to sort, VIRT, RES or SHR: ";
             std::cin >> field_name;
             if (field_name == "VIRT") {
                 field = 0;
             } else if (field_name == "RES") {
                 field = 1;
+            } else if (field_name == "SHR") {
+                field = 2;
             } else {
                 std::cout << "Invalid input" << std::endl;
             }
@@ -708,6 +714,7 @@ int main(int argc, char **argv) {
                 std::cin >> quit_input;
             }
         } else if (input == 'q' || input == 'Q') {
+            printf("\033[?25h"); // re-enable cursor
             return (0);
         }
 
