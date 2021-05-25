@@ -5,29 +5,38 @@ int main() {
 
     while (true) {
         printf("\033c"); // clear old
-        std::cout << "Input u/U to monitor memory usage, "
+        std::cout << "Input m/M to monitor memory usage, "
                   << "d/D to detect memory dynamics and leaks, "
                   << "q/Q to quit: ";
         std::cin >> type;
 
-        if (type == "u" || type == "U") {
+        if (type == "m" || type == "M") {
             top_main();
         } else if (type == "d" || type == "D") {
             std::string file_name = "";
-            FILE *file;
 
             std::cout << "Input file name: ";
             std::cin >> file_name;
-            while (!(file = fopen(file_name.c_str(), "r"))) {
+            std::ifstream fin;
+            fin.open(file_name);
+            while (fin.fail()) {
                 std::cout << "Input file name: ";
                 std::cin >> file_name;
+                fin.open(file_name);
             }
-            fclose(file);
-            std::cout << "!";
+
+            std::string line;
+            while (!fin.eof()) {
+                getline(fin, line);
+                std::cout << line << std::endl;
+            }
+
+            fin.close();
+
+            sleep(5);
         } else if (type == "q" || type == "Q") {
             return (0);
         }
     }
-
 }
 
