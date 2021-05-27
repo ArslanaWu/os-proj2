@@ -16,13 +16,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-/*
- * todo:
- * 1. try catch for invalid situation, e.g. file not found
- * 4. remove unused values
- * 6. beautify
- */
-
 const int PAGESIZE = getpagesize() / 1024; //// size in KB
 const long CLOCK_TICKS = sysconf(_SC_CLK_TCK);
 int total_process = 0, running_process = 0, sleeping_process = 0, stopped_process = 0;
@@ -32,20 +25,7 @@ struct process {
     std::string pid;
     std::unordered_map<std::string, int> statm;
     std::unordered_map<std::string, std::string> stat;
-//    std::vector<std::string> tid_list;
     int nice;
-
-//    process(const std::string &pid,
-//            const std::unordered_map<std::string, int> &statm,
-//            const std::unordered_map<std::string, std::string> &stat,
-//            const std::vector<std::string> &tid_list,
-//            int nice) {
-//        this->pid = pid;
-//        this->statm = statm;
-//        this->stat = stat;
-//        this->nice = nice;
-//        this->tid_list = tid_list;
-//    }
 
     process(const std::string &pid,
             const std::unordered_map<std::string, int> &statm,
@@ -56,12 +36,6 @@ struct process {
         this->stat = stat;
         this->nice = nice;
     }
-
-//    bool operator<(const process &b) const {
-//        std::unordered_map<std::string, int> a_statm = statm;
-//        std::unordered_map<std::string, int> b_statm = b.statm;
-//        return a_statm["rss"] > b_statm["rss"];
-//    }
 };
 
 struct compare_process {
@@ -775,20 +749,8 @@ void top_main() {
     }
 }
 
-/*
- * top pid
- * top command =pid_stat["name"]
- * top pr =nice + 20
- * top nice =getpriority(self.pid)
- * Psutil.test() VSZ: top VIRT, =pid_statm["vms"]
- * Psutil.test() RSS: top RES, =pid_statm["rss"]
- * Psutil.test() %MEM: top %MEM, =pid_statm["rss"]/virtual_mem["total"]
- * create time =stod(stat["create_time"]) / CLOCK_TICKS + get_boot_time()
- */
-//    int c;
 //    system ("/bin/stty raw");
 //    while((c=getchar())!= '.') {
-//        /* type a period to break out of the loop, since CTRL-D won't work raw */
 //        putchar(c);
 //    }
 //    system ("/bin/stty cooked");
