@@ -13,6 +13,10 @@ libleak/
 *.o
 *.obj
 
+### map file, log file
+.map
+.log
+
 # Precompiled Headers
 *.gch
 *.pch
