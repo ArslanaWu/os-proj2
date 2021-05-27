@@ -11,7 +11,8 @@
 // #include <addrList.h>
 
 // LD_PRELOAD=./libmem.so ./case1
-// gcc memtrace.c -g -fPIC -shared -rdynamic -o libmem.so -Wl,-Map,mem.map
+// gcc memtrace_2.c -g -fPIC -shared -rdynamic -o libmem.so -Wl,-Map,mem.map
+// g++ -g -rdynamic -o target task2/case1.cpp -Wl,-Map,target.map
 // g++ -g -rdynamic -o case1 case1.cpp -Wl,-Map,case1.map
 
 static void memory_trace_init(void);
@@ -79,6 +80,7 @@ void *printList(LinkList *head){
 
 static long leak_time_threshold = 2000;
 static int print_enable = 0;
+static int withoutMe = 0;
 
 static LinkList *head;
 
@@ -130,7 +132,7 @@ static void memory_trace_init(void)
     if(g_memory_trace_fp == NULL)
     {
         char file_name[260] = {0};
-        snprintf(file_name, sizeof(file_name), "./logs/%d_memory.log", getpid());
+        snprintf(file_name, sizeof(file_name), "./%d_memory.log", getpid());
         if((g_memory_trace_fp = fopen(file_name, "wb+")) != NULL)
         {
 
@@ -156,8 +158,10 @@ static void memory_trace_deinit(void)
         g_memory_trace_last_flush = 1;
         memory_trace_flush();
         if(head->next != NULL){
+            printf("\n---------------------------------------------------------------------------------\n ");
             printf("Memoryleak truly occurs at these addresses: ");
             printList(head);
+            printf("\n---------------------------------------------------------------------------------\n ");
         }
         fclose(g_memory_trace_fp);
         g_memory_trace_fp = NULL;
@@ -304,6 +308,7 @@ static void memory_leak_check(void){
         if(check > 0){
             // Show backtrace information of leak part
             if(check == 1){
+                printf("\n---------------------------------------------------------------------------------\n ");
                 printf("The target memory isn't freed\n ");
                 findInsert(g_memory_trace_cache[cur][BACK_TRACE_DEPTH + 1],head);
             }
@@ -346,6 +351,10 @@ static void memory_trace_flush(void)
 
 static void memory_trace_write(int alloc, void* addr, int size, long tp)
 {
+    if(withoutMe == 0){
+        withoutMe = 1;
+        return;
+    }
     if(g_memory_trace_cache_used >= CACHE_SIZE)
     {
         memory_trace_flush();
