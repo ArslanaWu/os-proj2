@@ -132,7 +132,7 @@ static void memory_trace_init(void)
     if(g_memory_trace_fp == NULL)
     {
         char file_name[260] = {0};
-        snprintf(file_name, sizeof(file_name), "./%d_memory.log", getpid());
+        snprintf(file_name, sizeof(file_name), "./output/logs/%d_memory.log", getpid());
         if((g_memory_trace_fp = fopen(file_name, "wb+")) != NULL)
         {
 
