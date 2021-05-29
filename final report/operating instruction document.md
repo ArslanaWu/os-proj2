@@ -9,6 +9,7 @@ Run these commands:
 ```shell
 cd task2
 gcc memtrace_2.c -g -fPIC -shared -rdynamic -o libmem.so -Wl,-Map,mem.map
+cd ..
 ```
 
 ## Main Menu

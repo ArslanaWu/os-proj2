@@ -26,17 +26,11 @@ int main() {
             }
             // task2/case1.cpp
             std::string command = "g++ -g -rdynamic -o output/target ";
-            command = command + file_name;
-            command = command + " -Wl,-Map,output/target.map"; 
-            // std::cout << command <<"\n"<< std::endl;
+            command += file_name;
+            command += " -Wl,-Map,output/target.map";
             system(command.data());
 
-            // std::string line;
-            // while (!fin.eof()) {
-            //     getline(fin, line);
-            //     std::cout << line << std::endl;
-            // }
-            const char* exec_file = "LD_PRELOAD=./task2/libmem.so ./output/target";
+            const char *exec_file = "LD_PRELOAD=./task2/libmem.so ./output/target";
             system(exec_file);
             fin.close();
 

@@ -13,8 +13,6 @@
 #include <queue>
 #include <stack>
 #include <termios.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 const int PAGESIZE = getpagesize() / 1024; //// size in KB
 const long CLOCK_TICKS = sysconf(_SC_CLK_TCK);
