@@ -8,7 +8,7 @@ Compile the program by command `g++ -o main main.cpp`, and then run the program 
 
 ![top](fig/main.png)
 
-<center><b>FIGURE 1</b> Prompt Information</center>
+<center><b>FIGURE 1</b> Main Menu</center>
 
 ## Real-time Statistics of Memory Usage
 
@@ -16,7 +16,7 @@ After entering `m` or `M`, real-time memory information will be printed on the s
 
 ![top](fig/htest.png)
 
-<center><b>FIGURE 2</b> Prompt Information</center>
+<center><b>FIGURE 2</b> Help Page</center>
 
 We provide detailed operation guidance in the interaction, and users can use functions easily following the guidance after pressing corresponding keys. FIGURE 3 is an example of pressing `p` of `P`.
 
