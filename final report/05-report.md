@@ -62,13 +62,13 @@ In the design document, we plan to implement detection of memory allocation and 
 
 So far, we have achieved **all the expected goals** in the design documents. As **FIGURE 6** shows, our program can dynamically print allocation/free, address, size, and time information to users while the target process is running.
 
-![](fig/detection.png)
+![](fig/detection.PNG)
 
 <center><b>FIGURE 6</b> Real-time Memory Usage Detection</center>
 
 Furthermore, when the target process finished, more detailed backtrace information will be shown in a log file as **FIGURE 7** shows.
 
-![](fig/log.png)
+![](fig/log.PNG)
 
 <center><b>FIGURE 7</b> Detailed Memory Usage Information</center>
 
@@ -81,13 +81,13 @@ In the design document, we plan to implement detection of memory leaks in two st
 
 So far, we have achieved **all the expected goals** in the design documents.  As **FIGURE 8** shows, our program can dynamically print detailed memory leak information to users while the target process is running.
 
-![](fig/rtleak.png)
+![](fig/rtleak.PNG)
 
 <center><b>FIGURE 8</b> Detailed Memory Leak Information</center>
 
 However, it is impossible to truly judge memory leak before the target process finished, so those real-time information is for reference only. We still need a static version to show whether memory leak truly occurs, so our program will also analyse memory usage after the whole target process finished, as **FIGURE 9** shows.
 
-![](/fig/leak.png)
+![](/fig/leak.PNG)
 
 <center><b>FIGURE 9</b>  Correct Memory Leak Information</center>
 
