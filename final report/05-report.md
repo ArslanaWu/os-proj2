@@ -1,6 +1,6 @@
 # Project2 Final Document
 
-<div align=center>11811535 Enhuai Liu<br>11811535 Shangxuan Wu</div>
+<div align=center>11811311 Enhuai Liu<br>11811535 Shangxuan Wu</div>
 
 ## Result Analysis
 
@@ -55,7 +55,41 @@ In addition to the above plan goals, we have also **implemented six enhancements
 
 ### Realize Detection of Memory Allocation and Release
 
+In the design document, we plan to implement detection of memory allocation and release in two steps: 
+
+1. Implement a static version, whenever memory allocation or deallocation occur, relevant information will be recorded, after program finished, users can see the detailed information.
+2. Implement a dynamic version, whenever memory allocation or deallocation occur, real-time relevant information will be recorded and  shown to users.
+
+So far, we have achieved **all the expected goals** in the design documents. As **FIGURE 6** shows, our program can dynamically print allocation/free, address, size, and time information to users while the target process is running.
+
+![](fig/detection.png)
+
+<center><b>FIGURE 6</b> Real-time Memory Usage Detection</center>
+
+Furthermore, when the target process finished, more detailed backtrace information will be shown in a log file as **FIGURE 7** shows.
+
+![](fig/log.png)
+
+<center><b>FIGURE 7</b> Detailed Memory Usage Information</center>
+
 ### Realize Detection of Memory Leaks
+
+In the design document, we plan to implement detection of memory leaks in two steps: 
+
+1. Implement a static version, whenever memory allocation or deallocation occurs, relevant information will be recorded, after program finished, out program analyse these information and let users see whether the memory occurred.
+2. Implement a dynamic version, whenever memory allocation or deallocation occurs, real-time relevant information will be recorded and analysed. let our program show detailed information to users when it asserts memory leak occurs.
+
+So far, we have achieved **all the expected goals** in the design documents.  As **FIGURE 8** shows, our program can dynamically print detailed memory leak information to users while the target process is running.
+
+![](fig/rtleak.png)
+
+<center><b>FIGURE 8</b> Detailed Memory Leak Information</center>
+
+However, it is impossible to truly judge memory leak before the target process finished, so those real-time information is for reference only. We still need a static version to show whether memory leak truly occurs, so our program will also analyse memory usage after the whole target process finished, as **FIGURE 9** shows.
+
+![](/fig/leak.png)
+
+<center><b>FIGURE 9</b>  Correct Memory Leak Information</center>
 
 ## Implementation
 
@@ -103,7 +137,101 @@ int main(){
 
 ### Realize Detection of Memory Allocation and Release
 
+In order to detect real-time memory usage, we hooked 3 functions in C library: `malloc()`, `realloc()` and `free()` by shared object. Therefore, we can use our functions to replace  true `malloc()`, `realloc()` and `free()` by modifying environment variable `LD_PRELOAD`.
+
+Fortunately, Linux source code has already  provided hook interfaces for these 3 functions, so we just hook these 3 functions: `__free_hook`, `__malloc_hook` and `__realloc__hook`. In this way, we can easily enable/disable our hook functions.
+
+```c
+// molloc.h
+/* Hooks for debugging and user-defined versions. */
+extern void (*__MALLOC_HOOK_VOLATILE __free_hook) (void *__ptr,
+                                                   const void *)
+__MALLOC_DEPRECATED;
+extern void *(*__MALLOC_HOOK_VOLATILE __malloc_hook)(size_t __size,
+                                                     const void *)
+__MALLOC_DEPRECATED;
+extern void *(*__MALLOC_HOOK_VOLATILE __realloc_hook)(void *__ptr,
+                                                      size_t __size,
+                                                      const void *)
+```
+
+Here is the pseudo code of `malloc()` detection(C style): when the process enter the hook function, we firstly disable the hook function and then call the original `malloc()` function to get the correct result, secondly record the relevant  information and show it to users, finally re-enable the hook function and return the result.
+
+```c
+static void * my_malloc_hook (size_t size, const void *caller)
+{
+    void *result = NULL;
+    memory_hook_disable(); 
+    result = malloc (size);
+    record_info(result);
+    info_show(result);
+    memory_hook_enable(); 
+    return result;
+}
+```
+
+We implement `__free_hook` and `__realloc__hook` in the same way.
+
+```c
+static void my_free_hook (void *ptr, const void *caller)
+{
+    memory_hook_disable();  
+    free (ptr);
+    record_info(ptr);
+    info_show(ptr);
+    memory_hook_enable();
+    return;
+}
+static void *my_realloc_hook (void *ptr, size_t size, const void *caller)
+{
+    void* result = NULL;
+    memory_hook_disable(); 
+    result = realloc (ptr, size);
+    record_info(result);
+    info_show(result);
+    memory_hook_enable(); 
+    return result;
+}
+```
+
 ### Realize Detection of Memory Leaks
+
+In this part, we should make full use of memory usage information from previous detection. Sine it is impossible to truly judge memory leak before the target process finished, so our dynamic methods can not truly identify memory leak, while it just takes the memory as leak if it lives longer than time-threshold or count-threshold. The default time-threshold is 1000 clocks and the default count-threshold is 256.
+
+Here is the pseudo code of dynamic memory leak detection: periodically call function `MEMORY_LEAK_CHECK` can show  real-time leak information to users. 
+
+```C
+static void *MEMORY_LEAK_CHECK()
+{
+    for (each address in memory alocation and release addresses){
+        if(this address is not freed/reallocted longer than time-threshold){
+            assert mem-leak occurs;
+            leak_show();
+        } 
+        if(this address is not freed/reallocted longer than count-threshold){
+            assert mem-leak occurs;
+            leak_show();
+        } 
+    }
+}
+```
+
+Furthermore, we should give the correct leak information after target process finished, here is the pseudo code: 
+
+```c
+static void *MEMORY_LEAK_CHECK_FINAL()
+{
+	if(target process finished){
+        if(unfreed_addresses_list.length > 0){
+            assert mem-leak occurs;
+        }
+        else{
+            assert mem-leak never occurs;
+        }
+        leak_show();
+    }
+}
+```
 
 ## Future Direction
 
@@ -117,7 +245,12 @@ int main(){
 
 ### Realize Detection of Memory Allocation and Release
 
+1. In our current implementation, each time memory allocation or release occurs, our program will print the information for users, which lead to frequent IO operations. We plan to optimize it by using additional buffer to store print information and then periodically print it from buffer.
+
 ### Realize Detection of Memory Leaks
+
+1. In our current implementation, we just use list and array to store memory usage information, which makes the time complexity of leak-detect function reach O(n). We plan to use some better data structure to reduce time complexity.
+2. Since we can only show the back-trace information, which is hard for human understanding. Users should use both leak back-trace information and file `target-program.map` to find related lines of code. We plan to translate back-trace information to related lines of code inside our program.
 
 ## Summary
 
