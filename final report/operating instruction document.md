@@ -1,6 +1,6 @@
 # Operating Instruction Document
 
-<div align=center>11811535 Enhuai Liu<br>11811535 Shangxuan Wu</div>
+<div align=center>11811311 Enhuai Liu<br>11811535 Shangxuan Wu</div>
 
 ## Before start
 
